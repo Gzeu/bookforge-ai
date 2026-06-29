@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}Browse Genres — BookForge AI{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-white">Browse Genres</h1>
+    <p class="text-gray-400 mt-1">Select a genre to get a ready-made premise, keywords, and optimal settings.</p>
+  </div>
+
+  <!-- Genre Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-10">
+    {% for genre in genres %}
+    <div class="card bg-base-200 shadow-lg hover:shadow-orange-500/20 hover:border hover:border-orange-500/40 transition-all cursor-pointer"
+         onclick="openGenreModal('{{ genre.id }}')">
+      <div class="card-body p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-2xl">{{ genre.emoji }}</span>
+          <h2 class="card-title text-white text-sm">{{ genre.name }}</h2>
+        </div>
+        <p class="text-gray-400 text-xs mb-3">{{ genre.description }}</p>
+        <div class="flex flex-wrap gap-1 mb-3">
+          {% for sub in genre.sub_genres[:3] %}
+          <span class="badge badge-ghost badge-xs text-gray-300">{{ sub }}</span>
+          {% endfor %}
+          {% if genre.sub_genres|length > 3 %}
+          <span class="badge badge-ghost badge-xs text-gray-500">+{{ genre.sub_genres|length - 3 }} more</span>
+          {% endif %}
+        </div>
+        <div class="flex justify-between text-xs text-gray-500">
+          <span>{{ genre.recommended_chapters }} chapters</span>
+          <span>${{ genre.typical_price }}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Batch Generator -->
+  <div class="card bg-base-200 shadow-xl mb-8">
+    <div class="card-body">
+      <h2 class="card-title text-white mb-4">🚀 Batch Generator — Multiple Books at Once</h2>
+      <form method="POST" action="/batch" class="space-y-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text text-gray-300">Select Genres</span></label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {% for genre in genres %}
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="genre_ids" value="{{ genre.id }}"
+                     class="checkbox checkbox-sm checkbox-warning" />
+              <span class="text-sm text-gray-300">{{ genre.emoji }} {{ genre.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text text-gray-300">Author Name</span></label>
+            <input type="text" name="author" placeholder="Your Name" value="BookForge AI"
+                   class="input input-bordered bg-base-300 text-white" />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text text-gray-300">Chapters / Book</span></label>
+            <input type="number" name="chapters" value="10" min="5" max="30"
+                   class="input input-bordered bg-base-300 text-white" />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text text-gray-300">AI Provider</span></label>
+            <select name="provider" class="select select-bordered bg-base-300 text-white">
+              <option value="deepseek">DeepSeek (cheapest)</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-warning w-full md:w-auto">
+          📚 Generate All Selected
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<!-- Genre Detail Modal -->
+<dialog id="genre_modal" class="modal">
+  <div class="modal-box bg-base-200 max-w-2xl w-full">
+    <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+    <div id="modal_content">Loading...</div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+const genreData = {{ genres_json | safe }};
+
+function openGenreModal(genreId) {
+  const g = genreData[genreId];
+  if (!g) return;
+
+  const premiseTemplate = g.premise_templates[Math.floor(Math.random() * g.premise_templates.length)];
+  const highlighted = premiseTemplate.replace(/\{([^}]+)\}/g,
+    '<span class="text-orange-400 font-semibold">{$1}</span>');
+
+  document.getElementById('modal_content').innerHTML = `
+    <div class="flex items-center gap-3 mb-4">
+      <span class="text-3xl">${g.emoji}</span>
+      <div>
+        <h3 class="font-bold text-xl text-white">${g.name}</h3>
+        <p class="text-gray-400 text-sm">${g.description}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-4">
+      <div class="bg-base-300 rounded-lg p-3 text-center">
+        <div class="text-lg font-bold text-orange-400">${g.recommended_chapters}</div>
+        <div class="text-xs text-gray-400">chapters</div>
+      </div>
+      <div class="bg-base-300 rounded-lg p-3 text-center">
+        <div class="text-lg font-bold text-orange-400">$${g.typical_price}</div>
+        <div class="text-xs text-gray-400">KDP price</div>
+      </div>
+      <div class="bg-base-300 rounded-lg p-3 text-center">
+        <div class="text-lg font-bold text-orange-400">${g.sub_genres.length}</div>
+        <div class="text-xs text-gray-400">sub-genres</div>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <p class="text-xs text-gray-500 uppercase font-semibold mb-2">💡 Generation Tip</p>
+      <p class="text-gray-300 text-sm bg-base-300 rounded p-3">${g.generation_tip}</p>
+    </div>
+
+    <div class="mb-4">
+      <p class="text-xs text-gray-500 uppercase font-semibold mb-2">📝 Sample Premise Template</p>
+      <p class="text-gray-300 text-sm bg-base-300 rounded p-3 leading-relaxed">${highlighted}</p>
+    </div>
+
+    <div class="mb-5">
+      <p class="text-xs text-gray-500 uppercase font-semibold mb-2">🔑 KDP Keywords</p>
+      <div class="flex flex-wrap gap-2">
+        ${g.kdp_keywords.map(k => `<span class="badge badge-outline badge-sm text-orange-400">${k}</span>`).join('')}
+      </div>
+    </div>
+
+    <a href="/?genre=${genreId}&chapters=${g.recommended_chapters}&price=${g.typical_price}"
+       class="btn btn-warning w-full">
+      → Generate a ${g.name} Book
+    </a>
+  `;
+  document.getElementById('genre_modal').showModal();
+}
+</script>
+{% endblock %}
