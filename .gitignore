@@ -1,0 +1,12 @@
+.env
+*.pyc
+__pycache__/
+manuscripts/
+epub_output/
+covers/*.jpg
+covers/*.png
+NovelClaw/apps/*/local_web_portal/data/
+NovelClaw/apps/*/.env
+.venv/
+node_modules/
+.DS_Store
