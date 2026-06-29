@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+BookForge AI — FastAPI Web UI
+Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
+"""
+import asyncio
+import os
+import json
+import uuid
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, Request, Form, BackgroundTasks, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BASE_DIR        = Path(__file__).parent
+MANUSCRIPTS_DIR = Path(os.getenv("MANUSCRIPTS_DIR", "./manuscripts"))
+EPUB_OUTPUT_DIR = Path(os.getenv("EPUB_OUTPUT_DIR", "./epub_output"))
+COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
+
+for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
+    d.mkdir(parents=True, exist_ok=True)
+
+app = FastAPI(title="BookForge AI", version="1.1.0")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+# In-memory job store (replace with Redis/DB for production)
+JOBS: dict[str, dict] = {}
+
+
+def _get_providers() -> list[dict]:
+    providers = []
+    if os.getenv("DEEPSEEK_API_KEY"):
+        providers.append({"slug": "deepseek", "label": "DeepSeek", "cost": "~$0.007/book"})
+    if os.getenv("OPENAI_API_KEY"):
+        providers.append({"slug": "openai", "label": "OpenAI", "cost": "~$0.03/book"})
+    if os.getenv("ANTHROPIC_API_KEY"):
+        providers.append({"slug": "anthropic", "label": "Anthropic", "cost": "~$0.04/book"})
+    providers.append({"slug": "local_llm", "label": "Local LLM (Ollama)", "cost": "Free"})
+    return providers or [{"slug": "deepseek", "label": "DeepSeek (key missing)", "cost": ""}]
+
+
+def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
+                       chapters: int, provider: str, description: str):
+    """Runs in a background thread via BackgroundTasks."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+    JOBS[job_id]["status"] = "generating"
+    JOBS[job_id]["log"] = ["Starting NovelClaw generation..."]
+
+    try:
+        from scripts.generate_book import NovelClawClient
+        client = NovelClawClient()
+        if not client.health():
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["log"].append("ERROR: NovelClaw is not running. Start Docker first.")
+            return
+
+        story = client.create_story(premise, chapters, provider)
+        story_id = story["id"]
+        JOBS[job_id]["story_id"] = story_id
+        JOBS[job_id]["log"].append(f"Story created (ID={story_id}). Generating chapters...")
+
+        import time
+        while True:
+            data = client.get_story(story_id)
+            status = data.get("status", "unknown")
+            done  = data.get("chapters_completed", 0)
+            total = data.get("chapters_requested", 0)
+            JOBS[job_id]["progress"] = {"done": done, "total": total, "status": status}
+            JOBS[job_id]["log"].append(f"  [{status}] {done}/{total} chapters")
+            if status in ("completed", "failed", "cancelled"):
+                break
+            time.sleep(20)
+
+        if data["status"] != "completed":
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["log"].append(f"Generation failed: {data.get('error', 'unknown')}")
+            return
+
+        manuscript_file = str(MANUSCRIPTS_DIR / f"manuscript_{story_id}.txt")
+        client.export(story_id, manuscript_file)
+        JOBS[job_id]["log"].append(f"Manuscript exported: {manuscript_file}")
+
+        JOBS[job_id]["status"] = "converting"
+        JOBS[job_id]["log"].append("Converting to EPUB...")
+        from scripts.txt_to_epub import txt_to_epub
+        safe = title.lower().replace(" ", "_")[:30]
+        epub_file = str(EPUB_OUTPUT_DIR / f"{safe}_{story_id}.epub")
+        txt_to_epub(manuscript_file, epub_file, title, author, description=description)
+        JOBS[job_id]["log"].append(f"EPUB created: {epub_file}")
+        JOBS[job_id]["epub_file"] = epub_file
+        JOBS[job_id]["epub_name"] = Path(epub_file).name
+        JOBS[job_id]["status"] = "done"
+        JOBS[job_id]["log"].append("Pipeline complete!")
+
+    except Exception as e:
+        JOBS[job_id]["status"] = "error"
+        JOBS[job_id]["log"].append(f"ERROR: {e}")
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "providers": _get_providers(),
+        "jobs": list(JOBS.values())[-10:],
+    })
+
+
+@app.post("/generate", response_class=HTMLResponse)
+async def generate(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    premise: str = Form(...),
+    title: str = Form(...),
+    author: str = Form(...),
+    chapters: int = Form(10),
+    provider: str = Form("deepseek"),
+    description: str = Form(""),
+):
+    job_id = str(uuid.uuid4())[:8]
+    JOBS[job_id] = {
+        "id": job_id, "title": title, "author": author,
+        "chapters": chapters, "provider": provider,
+        "status": "queued", "progress": {"done": 0, "total": chapters},
+        "log": [], "epub_file": None, "epub_name": None,
+    }
+    background_tasks.add_task(
+        _run_pipeline_sync, job_id, premise, title, author, chapters, provider, description
+    )
+    return templates.TemplateResponse("job.html", {"request": request, "job": JOBS[job_id]})
+
+
+@app.get("/job/{job_id}", response_class=HTMLResponse)
+async def job_page(request: Request, job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return templates.TemplateResponse("job.html", {"request": request, "job": job})
+
+
+@app.get("/api/job/{job_id}")
+async def job_status(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return JSONResponse(job)
+
+
+@app.get("/download/{job_id}")
+async def download_epub(job_id: str):
+    job = JOBS.get(job_id)
+    if not job or not job.get("epub_file"):
+        raise HTTPException(404, "EPUB not ready")
+    return FileResponse(
+        job["epub_file"],
+        media_type="application/epub+zip",
+        filename=job["epub_name"],
+    )
+
+
+@app.get("/research", response_class=HTMLResponse)
+async def research_page(request: Request):
+    return templates.TemplateResponse("research.html", {"request": request, "result": None})
+
+
+@app.post("/research", response_class=HTMLResponse)
+async def research_submit(request: Request, topic: str = Form(...),
+                          provider: str = Form("deepseek")):
+    from scripts.niche_research import research_niche
+    try:
+        result = research_niche(topic, provider)
+    except Exception as e:
+        result = {"error": str(e)}
+    return templates.TemplateResponse("research.html", {
+        "request": request, "result": result, "topic": topic
+    })
+
+
+@app.get("/health")
+async def health():
+    from scripts.generate_book import NovelClawClient
+    nc = NovelClawClient()
+    return {"bookforge": "ok", "novelclaw": nc.health()}

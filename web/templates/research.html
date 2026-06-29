@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Niche Research — BookForge AI{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <h1 class="text-4xl font-bold gradient-text mb-2">🔍 Niche Research</h1>
+  <p class="text-base-content/70">Find profitable Amazon KDP niches and keywords using AI</p>
+</div>
+
+<div class="card bg-base-200 shadow-xl card-hover mb-8">
+  <div class="card-body">
+    <form method="post" action="/research" class="flex flex-col md:flex-row gap-4">
+      <div class="form-control flex-1">
+        <label class="label"><span class="label-text font-semibold">Genre / Topic</span></label>
+        <input type="text" name="topic" required
+               class="input input-bordered w-full"
+               placeholder="e.g. crypto thriller, cozy mystery, self-help productivity"
+               value="{{ topic or '' }}" />
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text font-semibold">Provider</span></label>
+        <select name="provider" class="select select-bordered">
+          <option value="deepseek">DeepSeek</option>
+          <option value="openai">OpenAI</option>
+        </select>
+      </div>
+      <div class="form-control justify-end">
+        <button type="submit" class="btn btn-warning">Research</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if result %}
+  {% if result.error %}
+  <div class="alert alert-error">
+    <span>❌ {{ result.error }}</span>
+  </div>
+  {% else %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Title suggestion -->
+    <div class="card bg-base-200 shadow">
+      <div class="card-body">
+        <h2 class="card-title">📕 Suggested Title</h2>
+        <p class="text-2xl font-bold">{{ result.title }}</p>
+        {% if result.subtitle %}
+        <p class="text-base-content/70">{{ result.subtitle }}</p>
+        {% endif %}
+        <div class="flex gap-2 mt-2">
+          <span class="badge badge-success">{{ result.price or '$3.99' }}</span>
+          <span class="badge badge-info">{{ result.monthly_revenue_estimate or 'N/A' }}/mo est.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keywords -->
+    <div class="card bg-base-200 shadow">
+      <div class="card-body">
+        <h2 class="card-title">🔑 KDP Keywords</h2>
+        <div class="flex flex-wrap gap-2">
+          {% for kw in result.keywords or [] %}
+          <span class="badge badge-warning badge-outline">{{ kw }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Niches -->
+    <div class="card bg-base-200 shadow">
+      <div class="card-body">
+        <h2 class="card-title">🎯 Top Sub-Niches</h2>
+        <ul class="list-disc list-inside space-y-1">
+          {% for n in result.niches or [] %}
+          <li class="text-sm">{{ n }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Sample premise -->
+    <div class="card bg-base-200 shadow">
+      <div class="card-body">
+        <h2 class="card-title">✍️ Sample Premise</h2>
+        <p class="text-base-content/80 italic">{{ result.sample_premise }}</p>
+        <form method="post" action="/generate" class="mt-4">
+          <input type="hidden" name="premise" value="{{ result.sample_premise }}" />
+          <input type="hidden" name="title" value="{{ result.title }}" />
+          <input type="hidden" name="author" value="Author Name" />
+          <input type="hidden" name="description" value="{{ result.subtitle or '' }}" />
+          <button type="submit" class="btn btn-warning btn-sm">Use This &rarr; Generate</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

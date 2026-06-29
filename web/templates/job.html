@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.id }} — {{ job.title }}{% endblock %}
+{% block content %}
+
+<div class="mb-6 flex items-center gap-3">
+  <a href="/" class="btn btn-ghost btn-sm">← Back</a>
+  <h1 class="text-3xl font-bold">{{ job.title }}</h1>
+  <span id="job-status" class="badge badge-lg">{{ job.status }}</span>
+</div>
+
+<!-- Progress card -->
+<div class="card bg-base-200 shadow-xl mb-6">
+  <div class="card-body">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div>
+        <div class="text-xs opacity-60">Author</div>
+        <div class="font-semibold">{{ job.author }}</div>
+      </div>
+      <div>
+        <div class="text-xs opacity-60">Provider</div>
+        <div class="font-semibold"><span class="badge badge-outline">{{ job.provider }}</span></div>
+      </div>
+      <div>
+        <div class="text-xs opacity-60">Chapters</div>
+        <div class="font-semibold">{{ job.chapters }}</div>
+      </div>
+      <div>
+        <div class="text-xs opacity-60">Job ID</div>
+        <div class="font-mono text-xs opacity-60">{{ job.id }}</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="mb-2">
+      <div class="flex justify-between text-sm opacity-70 mb-1">
+        <span>Generation progress</span>
+        <span id="job-progress">{{ job.progress.done }}/{{ job.progress.total }}</span>
+      </div>
+      <div class="w-full bg-base-300 rounded-full h-4">
+        <div id="job-progress" class="bg-warning h-4 rounded-full transition-all text-xs text-center text-base-100 font-bold flex items-center justify-center"
+             style="width: {% if job.progress.total > 0 %}{{ ((job.progress.done / job.progress.total) * 100)|int }}%{% else %}5%{% endif %}">
+          {{ job.progress.done }}/{{ job.progress.total }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="spinner" class="flex items-center gap-2 text-info mt-2 {% if job.status in ['done','error'] %}hidden{% endif %}">
+      <span class="loading loading-spinner loading-sm"></span>
+      <span class="text-sm">Pipeline running...</span>
+    </div>
+
+    <!-- Download button -->
+    {% if job.status == 'done' %}
+    <div class="mt-4">
+      <a id="download-btn" href="/download/{{ job.id }}"
+         class="btn btn-success btn-lg gap-2">
+        <span class="text-xl">⬇️</span> Download EPUB
+      </a>
+    </div>
+    {% else %}
+    <a id="download-btn" href="/download/{{ job.id }}"
+       class="btn btn-success btn-lg gap-2 hidden mt-4">
+      <span class="text-xl">⬇️</span> Download EPUB
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Live log -->
+<div class="card bg-base-200 shadow">
+  <div class="card-body">
+    <h2 class="card-title text-sm opacity-70">Live Log</h2>
+    <div id="job-log"
+         class="bg-base-300 rounded-lg p-4 h-64 overflow-y-auto space-y-1">
+      {% for line in job.log %}
+      <div class="font-mono text-sm {% if 'ERROR' in line %}text-error{% endif %}">{{ line }}</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+  pollJob("{{ job.id }}");
+</script>
+{% endblock %}
