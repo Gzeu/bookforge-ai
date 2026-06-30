@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BookForge AI — FastAPI Web UI
+BookForge AI — FastAPI Web UI v1.2.0
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
@@ -26,7 +26,7 @@ COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
 for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="BookForge AI", version="1.1.0")
+app = FastAPI(title="BookForge AI", version="1.2.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
@@ -104,6 +104,45 @@ def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
     except Exception as e:
         JOBS[job_id]["status"] = "error"
         JOBS[job_id]["log"].append(f"ERROR: {e}")
+
+
+def _run_batch_sync(batch_job_id: str, genre_ids: list[str], author: str,
+                    chapters: int, provider: str):
+    """Run batch generation in background thread."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts.batch_pipeline import build_batch_from_genres, run_batch, save_batch_report
+
+    JOBS[batch_job_id]["status"] = "running"
+    JOBS[batch_job_id]["log"].append(f"Starting batch: {len(genre_ids)} genres")
+
+    try:
+        jobs = build_batch_from_genres(genre_ids, author, chapters, provider)
+        JOBS[batch_job_id]["log"].append(f"Queued {len(jobs)} books")
+        results = asyncio.run(run_batch(jobs, max_concurrent=2))
+
+        done_count  = sum(1 for j in results if j.status == "done")
+        fail_count  = sum(1 for j in results if j.status == "failed")
+        epub_files  = [j.epub_file for j in results if j.epub_file]
+
+        JOBS[batch_job_id].update({
+            "status": "done",
+            "batch_results": [
+                {"genre": j.genre_id, "title": j.title,
+                 "status": j.status, "epub": j.epub_file, "error": j.error}
+                for j in results
+            ],
+            "epub_files": epub_files,
+        })
+        JOBS[batch_job_id]["log"].append(
+            f"Batch complete: {done_count} done, {fail_count} failed"
+        )
+        report_path = str(MANUSCRIPTS_DIR / f"batch_report_{batch_job_id}.json")
+        save_batch_report(results, report_path)
+
+    except Exception as e:
+        JOBS[batch_job_id]["status"] = "error"
+        JOBS[batch_job_id]["log"].append(f"ERROR: {e}")
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -187,8 +226,70 @@ async def research_submit(request: Request, topic: str = Form(...),
     })
 
 
+@app.get("/categories", response_class=HTMLResponse)
+async def categories_page(request: Request):
+    """Browse all 20 genres with premise templates and KDP metadata."""
+    from scripts.categories import get_all_genres
+    from dataclasses import asdict
+    genres = get_all_genres()
+    genres_json = json.dumps({g.id: asdict(g) for g in genres})
+    return templates.TemplateResponse("categories.html", {
+        "request": request,
+        "genres": genres,
+        "genres_json": genres_json,
+    })
+
+
+@app.post("/batch", response_class=HTMLResponse)
+async def batch_generate(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    genre_ids: list[str] = Form(...),
+    author: str = Form("BookForge AI"),
+    chapters: int = Form(10),
+    provider: str = Form("deepseek"),
+):
+    """Queue a batch job generating one book per selected genre."""
+    batch_id = "batch_" + str(uuid.uuid4())[:8]
+    JOBS[batch_id] = {
+        "id": batch_id,
+        "title": f"Batch: {', '.join(genre_ids[:3])}{'...' if len(genre_ids) > 3 else ''}",
+        "author": author,
+        "chapters": chapters,
+        "provider": provider,
+        "status": "queued",
+        "is_batch": True,
+        "genre_ids": genre_ids,
+        "batch_results": [],
+        "epub_files": [],
+        "progress": {"done": 0, "total": len(genre_ids)},
+        "log": [f"Batch queued: {len(genre_ids)} genres"],
+    }
+    background_tasks.add_task(
+        _run_batch_sync, batch_id, genre_ids, author, chapters, provider
+    )
+    return templates.TemplateResponse("job.html", {"request": request, "job": JOBS[batch_id]})
+
+
+@app.get("/api/genres")
+async def api_genres():
+    """Return full genre library as JSON."""
+    from scripts.categories import get_all_genres
+    from dataclasses import asdict
+    return JSONResponse({g.id: asdict(g) for g in get_all_genres()})
+
+
+@app.get("/api/genres/{genre_id}/premise")
+async def api_random_premise(genre_id: str, fill: bool = True):
+    """Return a random filled premise for a given genre."""
+    from scripts.categories import get_random_premise, get_genre
+    if not get_genre(genre_id):
+        raise HTTPException(404, f"Genre '{genre_id}' not found")
+    return JSONResponse({"genre_id": genre_id, "premise": get_random_premise(genre_id, fill)})
+
+
 @app.get("/health")
 async def health():
     from scripts.generate_book import NovelClawClient
     nc = NovelClawClient()
-    return {"bookforge": "ok", "novelclaw": nc.health()}
+    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.2.0"}
