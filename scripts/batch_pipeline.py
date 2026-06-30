@@ -6,6 +6,7 @@ Generate multiple books in parallel across genres.
 from __future__ import annotations
 import asyncio
 import os
+import re
 import json
 from datetime import datetime
 from pathlib import Path
@@ -138,7 +139,6 @@ def save_batch_report(jobs: list[BatchJob], output_path: str = "batch_report.jso
 
 
 if __name__ == "__main__":
-    import re
     import typer
     app = typer.Typer()
 

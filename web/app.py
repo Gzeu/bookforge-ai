@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BookForge AI — FastAPI Web UI v1.4.1
+BookForge AI — FastAPI Web UI v1.5.0
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
@@ -25,7 +25,7 @@ COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
 for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="BookForge AI", version="1.4.1")
+app = FastAPI(title="BookForge AI", version="1.5.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
@@ -300,4 +300,4 @@ async def api_random_premise(genre_id: str, fill: bool = True):
 async def health():
     from scripts.generate_book import NovelClawClient
     nc = NovelClawClient()
-    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.4.1"}
+    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.5.0"}

@@ -13,6 +13,8 @@ load_dotenv()
 OPENAI_KEY   = os.getenv("OPENAI_API_KEY", "")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 
+REQUEST_TIMEOUT = 30  # seconds — prevents hang in Web UI background tasks
+
 RESEARCH_PROMPT = """
 You are an Amazon KDP publishing strategist. Given a book genre or topic, provide:
 
@@ -41,6 +43,7 @@ def research_niche(topic: str, provider: str = "deepseek") -> dict:
             json={"model": "deepseek-chat",
                   "messages": [{"role": "user", "content": prompt}],
                   "temperature": 0.7},
+            timeout=REQUEST_TIMEOUT,
         )
         content = r.json()["choices"][0]["message"]["content"]
     elif OPENAI_KEY:
@@ -50,6 +53,7 @@ def research_niche(topic: str, provider: str = "deepseek") -> dict:
                      "Content-Type": "application/json"},
             json={"model": "gpt-4o-mini",
                   "messages": [{"role": "user", "content": prompt}]},
+            timeout=REQUEST_TIMEOUT,
         )
         content = r.json()["choices"][0]["message"]["content"]
     else:

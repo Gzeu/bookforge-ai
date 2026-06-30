@@ -29,6 +29,10 @@ async def upload_to_kdp(
 ) -> bool:
     from playwright.async_api import async_playwright
 
+    # Validate epub exists before launching browser
+    if not Path(epub_file).exists():
+        raise FileNotFoundError(f"EPUB file not found: {epub_file}")
+
     if not KDP_EMAIL or not KDP_PASSWORD:
         raise ValueError("KDP_EMAIL and KDP_PASSWORD must be set in .env")
 

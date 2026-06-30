@@ -6,6 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.1] — 2026-06-30
+
+### Fixed
+- `scripts/batch_pipeline.py` — `import re` mutat la top-level (era doar în `__main__`, cauzând `NameError` la apelul `_make_title_from_premise()` din afara CLI)
+- `scripts/kdp_upload.py` — `FileNotFoundError` ridicat imediat dacă EPUB-ul nu există, înainte de lansarea browser-ului Playwright
+- `scripts/niche_research.py` — adăugat `timeout=30` la ambele apeluri `requests.post()` (DeepSeek + OpenAI) pentru a preveni hang în Web UI background tasks
+- `web/app.py` — versiunea bumped la `1.5.0` în `FastAPI(version=)` și `/health` endpoint
+
+---
+
 ## [1.5.0] — 2026-06-30
 
 ### Added
@@ -86,6 +96,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Planned
-- KDP sales stats `/report/custom` cu autentificare 2FA bypass
-- Multi-language premise generation
+- `JOBS` dict persistat pe disk via `BatchStateManager` (supraviețuiește restart)
+- `libasound2t64` fix în Dockerfile (Debian Bookworm)
+- `requirements.txt` sync sau eliminat în favoarea `pyproject.toml`
+- `.gitignore` extins (batch reports, kdp stats, pytest cache)
+- Scheduler flock pentru prevenire execuție dublă
 - SendGrid backend pentru `email_delivery.py`
+- Multi-language premise generation
