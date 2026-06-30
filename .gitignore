@@ -1,12 +1,53 @@
-.env
-*.pyc
+# Python
 __pycache__/
-manuscripts/
-epub_output/
-covers/*.jpg
-covers/*.png
-NovelClaw/apps/*/local_web_portal/data/
-NovelClaw/apps/*/.env
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
 .venv/
-node_modules/
+venv/
+env/
+.env
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# BookForge AI — generated output
+manuscripts/*.txt
+epub_output/*.epub
+covers/*.png
+covers/*.jpg
+
+# Batch & stats reports
+batch_report*.json
+kdp_stats_*.json
+batch_state_*.json
+
+# Scheduler job files (bind-mounted, not committed)
+schedules/*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Playwright
+test-results/
+playwright-report/
+
+# Docker
+*.log
