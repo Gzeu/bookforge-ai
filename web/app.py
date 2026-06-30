@@ -28,9 +28,7 @@ for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
 app = FastAPI(title="BookForge AI", version="2.0.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-# Python 3.14 fix: Jinja2 LRUCache uses (name, globals_dict) as cache key,
-# but Python 3.14 no longer allows unhashable types inside tuple keys.
-# Solution: bypass LRUCache entirely with cache_size=0.
+# Python 3.14 fix: bypass Jinja2 LRUCache (tuple-key unhashable bug)
 _jinja_env = Environment(
     loader=FileSystemLoader(str(BASE_DIR / "templates")),
     autoescape=True,
@@ -70,6 +68,42 @@ def _get_providers() -> list[dict]:
         providers.append({"slug": "anthropic", "label": "Anthropic", "cost": "~$0.04/book"})
     providers.append({"slug": "local_llm", "label": "Local LLM (Ollama)", "cost": "Free"})
     return providers or [{"slug": "mistral", "label": "Mistral AI (key missing)", "cost": ""}]
+
+
+def _cerebras_or_mistral_completion(prompt: str, temperature: float = 0.9, max_tokens: int = 300) -> str:
+    """Call Cerebras first, fall back to Mistral. Returns raw text content."""
+    cerebras_key = os.getenv("CEREBRAS_API_KEY")
+    mistral_key  = os.getenv("MISTRAL_API_KEY")
+
+    if cerebras_key:
+        try:
+            from cerebras.cloud.sdk import Cerebras
+            client = Cerebras(api_key=cerebras_key)
+            resp = client.chat.completions.create(
+                model="llama-4-scout-17b-16e-instruct",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception:
+            pass
+
+    if mistral_key:
+        try:
+            from mistralai import Mistral
+            client = Mistral(api_key=mistral_key)
+            resp = client.chat.complete(
+                model="mistral-small-latest",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception:
+            pass
+
+    raise HTTPException(503, "No AI provider available. Set CEREBRAS_API_KEY or MISTRAL_API_KEY.")
 
 
 def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
@@ -167,19 +201,32 @@ async def index(request: Request):
     })
 
 
+@app.post("/api/generate-premise")
+async def generate_premise(request: Request):
+    """Generate a story premise from a genre using Cerebras (fast)."""
+    body = await request.json()
+    genre = body.get("genre", "thriller").strip() or "thriller"
+
+    prompt = (
+        f"Write a single compelling, original story premise for a {genre} novel.\n"
+        f"Rules:\n"
+        f"- 2-3 sentences maximum\n"
+        f"- Vivid, specific details (location, character, conflict)\n"
+        f"- Amazon KDP commercial style — hook the reader immediately\n"
+        f"- No title, no chapter info, just the premise\n"
+        f"Output only the premise text, nothing else."
+    )
+    raw = _cerebras_or_mistral_completion(prompt, temperature=0.95, max_tokens=150)
+    return JSONResponse({"premise": raw})
+
+
 @app.post("/api/generate-titles")
 async def generate_titles(request: Request):
-    """
-    Uses Cerebras (fast) to generate 4 book title suggestions from a premise.
-    Falls back to Mistral if Cerebras key is not set.
-    """
+    """Generate 4 book title suggestions from a premise using Cerebras."""
     body = await request.json()
     premise = body.get("premise", "").strip()
     if not premise:
         raise HTTPException(400, "premise is required")
-
-    cerebras_key = os.getenv("CEREBRAS_API_KEY")
-    mistral_key = os.getenv("MISTRAL_API_KEY")
 
     prompt = (
         f"Generate exactly 4 compelling, marketable book titles for this premise:\n"
@@ -188,45 +235,12 @@ async def generate_titles(request: Request):
         f"- One title per line\n"
         f"- No numbering, no quotes, no explanations\n"
         f"- Make them punchy, commercial, Amazon KDP style\n"
-        f"- Mix styles: thriller, mystery, intrigue\n"
         f"Output only the 4 titles, nothing else."
     )
-
-    titles = []
-
-    if cerebras_key:
-        try:
-            from cerebras.cloud.sdk import Cerebras
-            client = Cerebras(api_key=cerebras_key)
-            resp = client.chat.completions.create(
-                model="llama-4-scout-17b-16e-instruct",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.9,
-            )
-            raw = resp.choices[0].message.content.strip()
-            titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
-        except Exception as e:
-            titles = []
-
-    if not titles and mistral_key:
-        try:
-            from mistralai import Mistral
-            client = Mistral(api_key=mistral_key)
-            resp = client.chat.complete(
-                model="mistral-small-latest",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.9,
-            )
-            raw = resp.choices[0].message.content.strip()
-            titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
-        except Exception as e:
-            titles = []
-
+    raw = _cerebras_or_mistral_completion(prompt, temperature=0.9, max_tokens=200)
+    titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
     if not titles:
         titles = ["The Hidden Protocol", "Dark Chain", "Zero Trust", "The Cipher Event"]
-
     return JSONResponse({"titles": titles})
 
 
@@ -322,7 +336,15 @@ async def research_page(request: Request):
 
 @app.post("/research", response_class=HTMLResponse)
 async def research_submit(request: Request, topic: str = Form(...), provider: str = Form(None)):
+    # Force cerebras, fall back to mistral
     from scripts.niche_research import research_niche, available_providers
+    avail = available_providers()
+    if "cerebras" in avail:
+        provider = "cerebras"
+    elif "mistral" in avail:
+        provider = "mistral"
+    elif avail:
+        provider = avail[0]
     try:
         result = research_niche(topic, provider)
     except Exception as e:

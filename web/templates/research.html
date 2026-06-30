@@ -4,48 +4,57 @@
 
 <div class="mb-8">
   <h1 class="text-4xl font-bold gradient-text mb-2">🔍 Niche Research</h1>
-  <p class="text-base-content/70">Find profitable Amazon KDP niches and keywords using AI</p>
+  <p class="text-base-content/60">Find profitable Amazon KDP niches and keywords — powered by <span class="text-warning font-semibold">Cerebras</span></p>
 </div>
 
-<div class="card bg-base-200 shadow-xl card-hover mb-8">
+<div class="card bg-base-200 shadow-xl border border-base-300 mb-8">
   <div class="card-body">
-    <form method="post" action="/research" class="flex flex-col md:flex-row gap-4">
+    <form method="post" action="/research" class="flex flex-col md:flex-row gap-4 items-end">
       <div class="form-control flex-1">
-        <label class="label"><span class="label-text font-semibold">Genre / Topic</span></label>
+        <label class="label">
+          <span class="label-text font-semibold">Genre / Topic</span>
+          <span class="label-text-alt text-base-content/40">e.g. crypto thriller, cozy mystery</span>
+        </label>
         <input type="text" name="topic" required
-               class="input input-bordered w-full"
-               placeholder="e.g. crypto thriller, cozy mystery, self-help productivity"
+               class="input input-bordered w-full focus:input-warning transition-all"
+               placeholder="crypto thriller, cozy mystery, self-help productivity..."
                value="{{ topic or '' }}" />
       </div>
-      <div class="form-control">
-        <label class="label"><span class="label-text font-semibold">Provider</span></label>
-        <select name="provider" class="select select-bordered">
-          <option value="deepseek">DeepSeek</option>
-          <option value="openai">OpenAI</option>
-        </select>
-      </div>
+      <!-- Provider hidden — always Cerebras (fast), fallback Mistral -->
+      <input type="hidden" name="provider" value="cerebras" />
       <div class="form-control justify-end">
-        <button type="submit" class="btn btn-warning">Research</button>
+        <button type="submit" class="btn btn-warning gap-2">
+          <span>⚡</span> Research with Cerebras
+        </button>
       </div>
     </form>
+
+    {% if available_providers %}
+    <div class="mt-3 flex items-center gap-2">
+      <span class="text-xs text-base-content/30">Active providers:</span>
+      {% for p in available_providers %}
+        <span class="badge badge-outline badge-xs {% if p == 'cerebras' %}badge-warning{% endif %}">{{ p }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
 {% if result %}
   {% if result.error %}
-  <div class="alert alert-error">
+  <div class="alert alert-error shadow mb-6">
     <span>❌ {{ result.error }}</span>
   </div>
   {% else %}
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
     <!-- Title suggestion -->
-    <div class="card bg-base-200 shadow">
+    <div class="card bg-base-200 shadow border border-base-300">
       <div class="card-body">
         <h2 class="card-title">📕 Suggested Title</h2>
-        <p class="text-2xl font-bold">{{ result.title }}</p>
+        <p class="text-2xl font-bold text-warning">{{ result.title }}</p>
         {% if result.subtitle %}
-        <p class="text-base-content/70">{{ result.subtitle }}</p>
+        <p class="text-base-content/60 text-sm">{{ result.subtitle }}</p>
         {% endif %}
         <div class="flex gap-2 mt-2">
           <span class="badge badge-success">{{ result.price or '$3.99' }}</span>
@@ -55,7 +64,7 @@
     </div>
 
     <!-- Keywords -->
-    <div class="card bg-base-200 shadow">
+    <div class="card bg-base-200 shadow border border-base-300">
       <div class="card-body">
         <h2 class="card-title">🔑 KDP Keywords</h2>
         <div class="flex flex-wrap gap-2">
@@ -67,29 +76,31 @@
     </div>
 
     <!-- Niches -->
-    <div class="card bg-base-200 shadow">
+    <div class="card bg-base-200 shadow border border-base-300">
       <div class="card-body">
         <h2 class="card-title">🎯 Top Sub-Niches</h2>
-        <ul class="list-disc list-inside space-y-1">
+        <ul class="space-y-2">
           {% for n in result.niches or [] %}
-          <li class="text-sm">{{ n }}</li>
+          <li class="flex items-start gap-2 text-sm">
+            <span class="text-warning mt-0.5">‣</span>
+            <span>{{ n }}</span>
+          </li>
           {% endfor %}
         </ul>
       </div>
     </div>
 
     <!-- Sample premise -->
-    <div class="card bg-base-200 shadow">
+    <div class="card bg-base-200 shadow border border-warning/30">
       <div class="card-body">
         <h2 class="card-title">✍️ Sample Premise</h2>
-        <p class="text-base-content/80 italic">{{ result.sample_premise }}</p>
-        <form method="post" action="/generate" class="mt-4">
-          <input type="hidden" name="premise" value="{{ result.sample_premise }}" />
-          <input type="hidden" name="title" value="{{ result.title }}" />
-          <input type="hidden" name="author" value="Author Name" />
-          <input type="hidden" name="description" value="{{ result.subtitle or '' }}" />
-          <button type="submit" class="btn btn-warning btn-sm">Use This &rarr; Generate</button>
-        </form>
+        <p class="text-base-content/80 italic text-sm leading-relaxed">{{ result.sample_premise }}</p>
+        <div class="card-actions mt-4">
+          <a href="/?premise={{ result.sample_premise | urlencode }}&title={{ result.title | urlencode }}"
+             class="btn btn-warning btn-sm gap-2">
+            <span>🚀</span> Use this &rarr; Generate Book
+          </a>
+        </div>
       </div>
     </div>
 
