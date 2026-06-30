@@ -43,7 +43,12 @@ STATUS_COLORS = {
 
 
 def _get_providers() -> list[dict]:
+    """Return providers that have an API key configured in .env."""
     providers = []
+    if os.getenv("MISTRAL_API_KEY"):
+        providers.append({"slug": "mistral", "label": "Mistral AI", "cost": "Free"})
+    if os.getenv("CEREBRAS_API_KEY"):
+        providers.append({"slug": "cerebras", "label": "Cerebras AI", "cost": "Free"})
     if os.getenv("DEEPSEEK_API_KEY"):
         providers.append({"slug": "deepseek", "label": "DeepSeek", "cost": "~$0.007/book"})
     if os.getenv("OPENAI_API_KEY"):
@@ -51,7 +56,7 @@ def _get_providers() -> list[dict]:
     if os.getenv("ANTHROPIC_API_KEY"):
         providers.append({"slug": "anthropic", "label": "Anthropic", "cost": "~$0.04/book"})
     providers.append({"slug": "local_llm", "label": "Local LLM (Ollama)", "cost": "Free"})
-    return providers or [{"slug": "deepseek", "label": "DeepSeek (key missing)", "cost": ""}]
+    return providers or [{"slug": "mistral", "label": "Mistral AI (key missing)", "cost": ""}]
 
 
 def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
@@ -153,7 +158,7 @@ async def index(request: Request):
 async def generate(
     request: Request, background_tasks: BackgroundTasks,
     premise: str = Form(...), title: str = Form(...), author: str = Form(...),
-    chapters: int = Form(10), provider: str = Form("deepseek"), description: str = Form(""),
+    chapters: int = Form(10), provider: str = Form("mistral"), description: str = Form(""),
 ):
     job_id = str(uuid.uuid4())[:8]
     JOBS[job_id] = {
@@ -209,7 +214,6 @@ async def api_jobs():
 # ❗ Specific route BEFORE generic /download/{job_id} to avoid FastAPI capture bug
 @app.get("/download/zip/{job_id}")
 async def download_batch_zip(job_id: str):
-    """Download all EPUBs from a batch job as a single ZIP archive."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from scripts.zip_export import zip_epub_batch
@@ -233,18 +237,26 @@ async def download_epub(job_id: str):
 
 @app.get("/research", response_class=HTMLResponse)
 async def research_page(request: Request):
-    return templates.TemplateResponse("research.html", {"request": request, "result": None})
+    from scripts.niche_research import available_providers
+    return templates.TemplateResponse("research.html", {
+        "request": request,
+        "result": None,
+        "available_providers": available_providers(),
+    })
 
 
 @app.post("/research", response_class=HTMLResponse)
-async def research_submit(request: Request, topic: str = Form(...), provider: str = Form("deepseek")):
-    from scripts.niche_research import research_niche
+async def research_submit(request: Request, topic: str = Form(...), provider: str = Form(None)):
+    from scripts.niche_research import research_niche, available_providers
     try:
         result = research_niche(topic, provider)
     except Exception as e:
         result = {"error": str(e)}
     return templates.TemplateResponse("research.html", {
-        "request": request, "result": result, "topic": topic
+        "request": request,
+        "result": result,
+        "topic": topic,
+        "available_providers": available_providers(),
     })
 
 
@@ -263,7 +275,7 @@ async def categories_page(request: Request):
 async def batch_generate(
     request: Request, background_tasks: BackgroundTasks,
     genre_ids: list[str] = Form(...), author: str = Form("BookForge AI"),
-    chapters: int = Form(10), provider: str = Form("deepseek"),
+    chapters: int = Form(10), provider: str = Form("mistral"),
 ):
     batch_id = "batch_" + str(uuid.uuid4())[:8]
     JOBS[batch_id] = {

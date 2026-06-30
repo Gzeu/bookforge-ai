@@ -2,9 +2,9 @@
 """
 BookForge AI — NovelClaw API Client
 Generates a complete novel manuscript via NovelClaw REST API.
+NovelClaw accepts any OpenAI-compatible provider slug via the 'provider' field.
 """
 import os
-import sys
 import time
 import requests
 from pathlib import Path
@@ -14,8 +14,17 @@ load_dotenv()
 
 BASE_URL = os.getenv("NOVELCLAW_BASE_URL", "http://127.0.0.1:8012")
 API_KEY  = os.getenv("NOVELCLAW_API_KEY", "change-this-agent-api-key")
-PROVIDER = os.getenv("DEFAULT_PROVIDER", "deepseek")
+PROVIDER = os.getenv("DEFAULT_PROVIDER", "mistral")
 MANUSCRIPTS_DIR = Path(os.getenv("MANUSCRIPTS_DIR", "./manuscripts"))
+
+# Provider slug mapping — NovelClaw accepts these slugs directly
+# mistral   → Mistral AI (free tier)
+# cerebras  → Cerebras AI (free tier)
+# deepseek  → DeepSeek (~$0.007/book)
+# openai    → OpenAI GPT-4o-mini
+# anthropic → Anthropic Claude
+# local_llm → Ollama (local, free)
+VALID_PROVIDERS = {"mistral", "cerebras", "deepseek", "openai", "anthropic", "local_llm"}
 
 
 class NovelClawClient:
@@ -32,6 +41,8 @@ class NovelClawClient:
 
     def create_story(self, premise: str, chapters: int = 10,
                      provider: str = PROVIDER, language: str = "en") -> dict:
+        if provider not in VALID_PROVIDERS:
+            raise ValueError(f"Invalid provider '{provider}'. Valid: {VALID_PROVIDERS}")
         payload = {
             "provider": provider,
             "premise": premise,
@@ -98,7 +109,8 @@ if __name__ == "__main__":
     def run(
         premise: str = typer.Argument(..., help="Story premise"),
         chapters: int = typer.Option(10, "--chapters", "-c"),
-        provider: str = typer.Option(PROVIDER, "--provider", "-p"),
+        provider: str = typer.Option(PROVIDER, "--provider", "-p",
+                                     help="mistral | cerebras | deepseek | openai | anthropic | local_llm"),
     ):
         client = NovelClawClient()
         if not client.health():
