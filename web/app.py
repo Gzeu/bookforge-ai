@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request, Form, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,7 +27,22 @@ for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
 
 app = FastAPI(title="BookForge AI", version="1.5.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+# Python 3.14 fix: Jinja2 LRUCache uses (name, globals_dict) as cache key,
+# but Python 3.14 no longer allows unhashable types inside tuple keys.
+# Solution: bypass LRUCache entirely with cache_size=0.
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(BASE_DIR / "templates")),
+    autoescape=True,
+    cache_size=0,
+)
+
+
+def _render(template_name: str, context: dict) -> HTMLResponse:
+    """Render a Jinja2 template directly, bypassing Starlette's Jinja2Templates."""
+    html = _jinja_env.get_template(template_name).render(context)
+    return HTMLResponse(content=html)
+
 
 JOBS: dict[str, dict] = {}
 
@@ -147,7 +162,7 @@ def _run_batch_sync(batch_job_id: str, genre_ids: list[str], author: str,
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {
+    return _render("index.html", {
         "request": request,
         "providers": _get_providers(),
         "jobs": list(JOBS.values())[-10:],
@@ -170,7 +185,7 @@ async def generate(
     background_tasks.add_task(
         _run_pipeline_sync, job_id, premise, title, author, chapters, provider, description
     )
-    return templates.TemplateResponse("job.html", {"request": request, "job": JOBS[job_id]})
+    return _render("job.html", {"request": request, "job": JOBS[job_id]})
 
 
 @app.get("/job/{job_id}", response_class=HTMLResponse)
@@ -178,7 +193,7 @@ async def job_page(request: Request, job_id: str):
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    return templates.TemplateResponse("job.html", {"request": request, "job": job})
+    return _render("job.html", {"request": request, "job": job})
 
 
 @app.get("/api/job/{job_id}")
@@ -191,7 +206,7 @@ async def job_status(job_id: str):
 
 @app.get("/jobs", response_class=HTMLResponse)
 async def jobs_dashboard(request: Request):
-    return templates.TemplateResponse("jobs.html", {
+    return _render("jobs.html", {
         "request": request,
         "jobs": list(JOBS.values()),
         "status_colors": STATUS_COLORS,
@@ -238,7 +253,7 @@ async def download_epub(job_id: str):
 @app.get("/research", response_class=HTMLResponse)
 async def research_page(request: Request):
     from scripts.niche_research import available_providers
-    return templates.TemplateResponse("research.html", {
+    return _render("research.html", {
         "request": request,
         "result": None,
         "available_providers": available_providers(),
@@ -252,7 +267,7 @@ async def research_submit(request: Request, topic: str = Form(...), provider: st
         result = research_niche(topic, provider)
     except Exception as e:
         result = {"error": str(e)}
-    return templates.TemplateResponse("research.html", {
+    return _render("research.html", {
         "request": request,
         "result": result,
         "topic": topic,
@@ -266,7 +281,7 @@ async def categories_page(request: Request):
     from dataclasses import asdict
     genres = get_all_genres()
     genres_json = json.dumps({g.id: asdict(g) for g in genres})
-    return templates.TemplateResponse("categories.html", {
+    return _render("categories.html", {
         "request": request, "genres": genres, "genres_json": genres_json,
     })
 
@@ -290,7 +305,7 @@ async def batch_generate(
     background_tasks.add_task(
         _run_batch_sync, batch_id, genre_ids, author, chapters, provider
     )
-    return templates.TemplateResponse("job.html", {"request": request, "job": JOBS[batch_id]})
+    return _render("job.html", {"request": request, "job": JOBS[batch_id]})
 
 
 @app.get("/api/genres")
