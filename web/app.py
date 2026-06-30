@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BookForge AI — FastAPI Web UI v2.0.0
+BookForge AI — FastAPI Web UI v2.0.1
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
@@ -25,10 +25,9 @@ COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
 for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="BookForge AI", version="2.0.0")
+app = FastAPI(title="BookForge AI", version="2.0.1")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-# Python 3.14 fix: bypass Jinja2 LRUCache (tuple-key unhashable bug)
 _jinja_env = Environment(
     loader=FileSystemLoader(str(BASE_DIR / "templates")),
     autoescape=True,
@@ -53,6 +52,10 @@ STATUS_COLORS = {
     "failed": "badge-error",
 }
 
+# ── Active Cerebras model (update here if deprecated) ──────────────────────
+CEREBRAS_MODEL = "llama-3.3-70b"   # llama3.1-8b | llama-3.3-70b | gpt-oss-120b
+# ───────────────────────────────────────────────────────────────────────────
+
 
 def _get_providers() -> list[dict]:
     providers = []
@@ -71,7 +74,7 @@ def _get_providers() -> list[dict]:
 
 
 def _cerebras_or_mistral_completion(prompt: str, temperature: float = 0.9, max_tokens: int = 300) -> str:
-    """Call Cerebras first, fall back to Mistral. Returns raw text content."""
+    """Call Cerebras first (llama-3.3-70b), fall back to Mistral. Returns raw text."""
     cerebras_key = os.getenv("CEREBRAS_API_KEY")
     mistral_key  = os.getenv("MISTRAL_API_KEY")
 
@@ -80,14 +83,15 @@ def _cerebras_or_mistral_completion(prompt: str, temperature: float = 0.9, max_t
             from cerebras.cloud.sdk import Cerebras
             client = Cerebras(api_key=cerebras_key)
             resp = client.chat.completions.create(
-                model="llama-4-scout-17b-16e-instruct",
+                model=CEREBRAS_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
             return resp.choices[0].message.content.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            # Log and fall through to Mistral
+            print(f"[Cerebras] {e} — falling back to Mistral")
 
     if mistral_key:
         try:
@@ -100,10 +104,10 @@ def _cerebras_or_mistral_completion(prompt: str, temperature: float = 0.9, max_t
                 temperature=temperature,
             )
             return resp.choices[0].message.content.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Mistral] {e}")
 
-    raise HTTPException(503, "No AI provider available. Set CEREBRAS_API_KEY or MISTRAL_API_KEY.")
+    raise RuntimeError("No AI provider available. Set CEREBRAS_API_KEY or MISTRAL_API_KEY in .env")
 
 
 def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
@@ -206,7 +210,6 @@ async def generate_premise(request: Request):
     """Generate a story premise from a genre using Cerebras (fast)."""
     body = await request.json()
     genre = body.get("genre", "thriller").strip() or "thriller"
-
     prompt = (
         f"Write a single compelling, original story premise for a {genre} novel.\n"
         f"Rules:\n"
@@ -216,8 +219,11 @@ async def generate_premise(request: Request):
         f"- No title, no chapter info, just the premise\n"
         f"Output only the premise text, nothing else."
     )
-    raw = _cerebras_or_mistral_completion(prompt, temperature=0.95, max_tokens=150)
-    return JSONResponse({"premise": raw})
+    try:
+        raw = _cerebras_or_mistral_completion(prompt, temperature=0.95, max_tokens=150)
+        return JSONResponse({"premise": raw})
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
 
 
 @app.post("/api/generate-titles")
@@ -227,7 +233,6 @@ async def generate_titles(request: Request):
     premise = body.get("premise", "").strip()
     if not premise:
         raise HTTPException(400, "premise is required")
-
     prompt = (
         f"Generate exactly 4 compelling, marketable book titles for this premise:\n"
         f"{premise}\n\n"
@@ -237,11 +242,14 @@ async def generate_titles(request: Request):
         f"- Make them punchy, commercial, Amazon KDP style\n"
         f"Output only the 4 titles, nothing else."
     )
-    raw = _cerebras_or_mistral_completion(prompt, temperature=0.9, max_tokens=200)
-    titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
-    if not titles:
-        titles = ["The Hidden Protocol", "Dark Chain", "Zero Trust", "The Cipher Event"]
-    return JSONResponse({"titles": titles})
+    try:
+        raw = _cerebras_or_mistral_completion(prompt, temperature=0.9, max_tokens=200)
+        titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
+        if not titles:
+            titles = ["The Hidden Protocol", "Dark Chain", "Zero Trust", "The Cipher Event"]
+        return JSONResponse({"titles": titles})
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
 
 
 @app.post("/generate", response_class=HTMLResponse)
@@ -336,7 +344,6 @@ async def research_page(request: Request):
 
 @app.post("/research", response_class=HTMLResponse)
 async def research_submit(request: Request, topic: str = Form(...), provider: str = Form(None)):
-    # Force cerebras, fall back to mistral
     from scripts.niche_research import research_niche, available_providers
     avail = available_providers()
     if "cerebras" in avail:
@@ -409,4 +416,5 @@ async def api_random_premise(genre_id: str, fill: bool = True):
 async def health():
     from scripts.generate_book import NovelClawClient
     nc = NovelClawClient()
-    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "2.0.0"}
+    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "2.0.1",
+            "cerebras_model": CEREBRAS_MODEL}
