@@ -1,0 +1,69 @@
+# BookForge AI — Full Stack Docker Compose
+# Usage: docker compose up -d
+# Web UI: http://localhost:8020
+# NovelClaw API: http://localhost:8000
+
+services:
+
+  novelclaw:
+    image: novelclaw/server:latest
+    container_name: novelclaw
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - NOVELCLAW_API_KEY=${NOVELCLAW_API_KEY}
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - novelclaw_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - bookforge_net
+
+  bookforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bookforge
+    restart: unless-stopped
+    ports:
+      - "8020:8020"
+    env_file:
+      - .env
+    environment:
+      - NOVELCLAW_BASE_URL=http://novelclaw:8000
+      - MANUSCRIPTS_DIR=/data/manuscripts
+      - EPUB_OUTPUT_DIR=/data/epub_output
+      - COVERS_DIR=/data/covers
+    volumes:
+      - bookforge_data:/data
+      - ./schedules:/app/schedules
+    depends_on:
+      novelclaw:
+        condition: service_healthy
+    networks:
+      - bookforge_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  novelclaw_data:
+    driver: local
+  bookforge_data:
+    driver: local
+
+networks:
+  bookforge_net:
+    driver: bridge
