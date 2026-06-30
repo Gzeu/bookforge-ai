@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BookForge AI — FastAPI Web UI v1.5.0
+BookForge AI — FastAPI Web UI v2.0.0
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
@@ -25,7 +25,7 @@ COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
 for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="BookForge AI", version="1.5.0")
+app = FastAPI(title="BookForge AI", version="2.0.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 # Python 3.14 fix: Jinja2 LRUCache uses (name, globals_dict) as cache key,
@@ -39,7 +39,6 @@ _jinja_env = Environment(
 
 
 def _render(template_name: str, context: dict) -> HTMLResponse:
-    """Render a Jinja2 template directly, bypassing Starlette's Jinja2Templates."""
     html = _jinja_env.get_template(template_name).render(context)
     return HTMLResponse(content=html)
 
@@ -58,7 +57,6 @@ STATUS_COLORS = {
 
 
 def _get_providers() -> list[dict]:
-    """Return providers that have an API key configured in .env."""
     providers = []
     if os.getenv("MISTRAL_API_KEY"):
         providers.append({"slug": "mistral", "label": "Mistral AI", "cost": "Free"})
@@ -169,6 +167,69 @@ async def index(request: Request):
     })
 
 
+@app.post("/api/generate-titles")
+async def generate_titles(request: Request):
+    """
+    Uses Cerebras (fast) to generate 4 book title suggestions from a premise.
+    Falls back to Mistral if Cerebras key is not set.
+    """
+    body = await request.json()
+    premise = body.get("premise", "").strip()
+    if not premise:
+        raise HTTPException(400, "premise is required")
+
+    cerebras_key = os.getenv("CEREBRAS_API_KEY")
+    mistral_key = os.getenv("MISTRAL_API_KEY")
+
+    prompt = (
+        f"Generate exactly 4 compelling, marketable book titles for this premise:\n"
+        f"{premise}\n\n"
+        f"Rules:\n"
+        f"- One title per line\n"
+        f"- No numbering, no quotes, no explanations\n"
+        f"- Make them punchy, commercial, Amazon KDP style\n"
+        f"- Mix styles: thriller, mystery, intrigue\n"
+        f"Output only the 4 titles, nothing else."
+    )
+
+    titles = []
+
+    if cerebras_key:
+        try:
+            from cerebras.cloud.sdk import Cerebras
+            client = Cerebras(api_key=cerebras_key)
+            resp = client.chat.completions.create(
+                model="llama-4-scout-17b-16e-instruct",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.9,
+            )
+            raw = resp.choices[0].message.content.strip()
+            titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
+        except Exception as e:
+            titles = []
+
+    if not titles and mistral_key:
+        try:
+            from mistralai import Mistral
+            client = Mistral(api_key=mistral_key)
+            resp = client.chat.complete(
+                model="mistral-small-latest",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.9,
+            )
+            raw = resp.choices[0].message.content.strip()
+            titles = [t.strip() for t in raw.split("\n") if t.strip()][:4]
+        except Exception as e:
+            titles = []
+
+    if not titles:
+        titles = ["The Hidden Protocol", "Dark Chain", "Zero Trust", "The Cipher Event"]
+
+    return JSONResponse({"titles": titles})
+
+
 @app.post("/generate", response_class=HTMLResponse)
 async def generate(
     request: Request, background_tasks: BackgroundTasks,
@@ -226,7 +287,6 @@ async def api_jobs():
     return JSONResponse(jobs_list)
 
 
-# ❗ Specific route BEFORE generic /download/{job_id} to avoid FastAPI capture bug
 @app.get("/download/zip/{job_id}")
 async def download_batch_zip(job_id: str):
     import sys
@@ -327,4 +387,4 @@ async def api_random_premise(genre_id: str, fill: bool = True):
 async def health():
     from scripts.generate_book import NovelClawClient
     nc = NovelClawClient()
-    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.5.0"}
+    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "2.0.0"}
