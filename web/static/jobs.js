@@ -10,22 +10,33 @@
     failed: 'badge-error',
   };
 
+  /** Escape HTML special chars to prevent XSS from job data */
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function progressHtml(prog) {
     if (!prog || !prog.total) return '<span class="text-xs opacity-40">-</span>';
     return `
       <div class="flex items-center gap-2">
-        <progress class="progress progress-primary w-20" value="${prog.done}" max="${prog.total}"></progress>
-        <span class="text-xs">${prog.done}/${prog.total}</span>
+        <progress class="progress progress-primary w-20" value="${esc(prog.done)}" max="${esc(prog.total)}"></progress>
+        <span class="text-xs">${esc(prog.done)}/${esc(prog.total)}</span>
       </div>`;
   }
 
   function actionsHtml(job) {
-    let html = `<a href="/job/${job.id}" class="btn btn-xs btn-ghost">Detail</a>`;
+    const id = esc(job.id);
+    let html = `<a href="/job/${id}" class="btn btn-xs btn-ghost">Detail</a>`;
     if (job.status === 'done') {
       if (job.is_batch) {
-        html += `<a href="/download/zip/${job.id}" class="btn btn-xs btn-success">↯ ZIP</a>`;
+        html += `<a href="/download/zip/${id}" class="btn btn-xs btn-success">↯ ZIP</a>`;
       } else {
-        html += `<a href="/download/${job.id}" class="btn btn-xs btn-success">↯ EPUB</a>`;
+        html += `<a href="/download/${id}" class="btn btn-xs btn-success">↯ EPUB</a>`;
       }
     }
     return html;
@@ -44,10 +55,10 @@
         return;
       }
 
-      // Update existing rows or insert new ones
-      const existingIds = new Set([...tbody.querySelectorAll('tr[data-job-id]')].map(r => r.dataset.jobId));
+      const existingIds = new Set(
+        [...tbody.querySelectorAll('tr[data-job-id]')].map(r => r.dataset.jobId)
+      );
 
-      // Reverse for newest-first display
       [...jobs].reverse().forEach(job => {
         const color = STATUS_COLORS[job.status] || 'badge-neutral';
         const typeLabel = job.is_batch
@@ -55,23 +66,24 @@
           : '<span class="badge badge-outline badge-sm badge-primary">Single</span>';
 
         if (existingIds.has(job.id)) {
-          const row = tbody.querySelector(`tr[data-job-id="${job.id}"]`);
+          const row = tbody.querySelector(`tr[data-job-id="${esc(job.id)}"]`);
           if (row) {
             row.querySelector('td:nth-child(5)').innerHTML = progressHtml(job.progress);
-            row.querySelector('td:nth-child(6)').innerHTML = `<span class="badge ${color}">${job.status}</span>`;
+            row.querySelector('td:nth-child(6)').innerHTML =
+              `<span class="badge ${color}">${esc(job.status)}</span>`;
             row.querySelector('td:nth-child(7)').innerHTML = actionsHtml(job);
           }
         } else {
           const tr = document.createElement('tr');
           tr.dataset.jobId = job.id;
-          tr.setAttribute('id', `row-${job.id}`);
+          tr.id = `row-${esc(job.id)}`;
           tr.innerHTML = `
-            <td class="font-mono text-xs opacity-60">${job.id}</td>
-            <td class="max-w-xs truncate font-semibold">${job.title}</td>
+            <td class="font-mono text-xs opacity-60">${esc(job.id)}</td>
+            <td class="max-w-xs truncate font-semibold">${esc(job.title)}</td>
             <td>${typeLabel}</td>
-            <td class="text-sm opacity-70">${job.provider || '-'}</td>
+            <td class="text-sm opacity-70">${esc(job.provider)}</td>
             <td>${progressHtml(job.progress)}</td>
-            <td><span class="badge ${color}">${job.status}</span></td>
+            <td><span class="badge ${color}">${esc(job.status)}</span></td>
             <td class="space-x-1">${actionsHtml(job)}</td>`;
           tbody.prepend(tr);
         }

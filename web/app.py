@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BookForge AI — FastAPI Web UI v1.4.0
+BookForge AI — FastAPI Web UI v1.4.1
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
@@ -8,7 +8,6 @@ import os
 import json
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI, Request, Form, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -26,11 +25,10 @@ COVERS_DIR      = Path(os.getenv("COVERS_DIR", "./covers"))
 for d in (MANUSCRIPTS_DIR, EPUB_OUTPUT_DIR, COVERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="BookForge AI", version="1.4.0")
+app = FastAPI(title="BookForge AI", version="1.4.1")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
-# In-memory job store (replace with Redis/DB for production)
 JOBS: dict[str, dict] = {}
 
 STATUS_COLORS = {
@@ -58,7 +56,7 @@ def _get_providers() -> list[dict]:
 
 def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
                        chapters: int, provider: str, description: str):
-    import sys
+    import sys, time
     sys.path.insert(0, str(Path(__file__).parent.parent))
     JOBS[job_id]["status"] = "generating"
     JOBS[job_id]["log"] = ["Starting NovelClaw generation..."]
@@ -73,7 +71,6 @@ def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
         story_id = story["id"]
         JOBS[job_id]["story_id"] = story_id
         JOBS[job_id]["log"].append(f"Story created (ID={story_id}). Generating chapters...")
-        import time
         while True:
             data = client.get_story(story_id)
             status = data.get("status", "unknown")
@@ -189,7 +186,6 @@ async def job_status(job_id: str):
 
 @app.get("/jobs", response_class=HTMLResponse)
 async def jobs_dashboard(request: Request):
-    """Live jobs dashboard — all jobs with status, progress, and download links."""
     return templates.TemplateResponse("jobs.html", {
         "request": request,
         "jobs": list(JOBS.values()),
@@ -199,7 +195,6 @@ async def jobs_dashboard(request: Request):
 
 @app.get("/api/jobs")
 async def api_jobs():
-    """Return all jobs as JSON for dashboard polling."""
     jobs_list = [
         {
             **{k: v for k, v in job.items() if k != "log"},
@@ -211,16 +206,7 @@ async def api_jobs():
     return JSONResponse(jobs_list)
 
 
-@app.get("/download/{job_id}")
-async def download_epub(job_id: str):
-    job = JOBS.get(job_id)
-    if not job or not job.get("epub_file"):
-        raise HTTPException(404, "EPUB not ready")
-    return FileResponse(
-        job["epub_file"], media_type="application/epub+zip", filename=job["epub_name"]
-    )
-
-
+# ❗ Specific route BEFORE generic /download/{job_id} to avoid FastAPI capture bug
 @app.get("/download/zip/{job_id}")
 async def download_batch_zip(job_id: str):
     """Download all EPUBs from a batch job as a single ZIP archive."""
@@ -231,9 +217,17 @@ async def download_batch_zip(job_id: str):
     if not zip_path:
         raise HTTPException(404, "No EPUBs available for this job")
     return FileResponse(
-        zip_path,
-        media_type="application/zip",
-        filename=Path(zip_path).name,
+        zip_path, media_type="application/zip", filename=Path(zip_path).name
+    )
+
+
+@app.get("/download/{job_id}")
+async def download_epub(job_id: str):
+    job = JOBS.get(job_id)
+    if not job or not job.get("epub_file"):
+        raise HTTPException(404, "EPUB not ready")
+    return FileResponse(
+        job["epub_file"], media_type="application/epub+zip", filename=job["epub_name"]
     )
 
 
@@ -306,4 +300,4 @@ async def api_random_premise(genre_id: str, fill: bool = True):
 async def health():
     from scripts.generate_book import NovelClawClient
     nc = NovelClawClient()
-    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.4.0"}
+    return {"bookforge": "ok", "novelclaw": nc.health(), "version": "1.4.1"}

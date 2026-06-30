@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "bookforge-ai"
-version = "1.4.0"
+version = "1.4.1"
 description = "AI-powered book publishing pipeline — NovelClaw → EPUB/DOCX → Amazon KDP"
 readme = "README.md"
 license = { file = "LICENSE" }

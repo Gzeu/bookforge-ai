@@ -5,13 +5,21 @@ from datetime import datetime
 from pathlib import Path
 
 
-def zip_files(paths: list[str], output_path: str) -> str:
-    """Zip a list of file paths into a single archive."""
+def zip_files(paths: list[str], output_path: str) -> str | None:
+    """
+    Zip a list of file paths into a single archive.
+    Returns output_path on success, or None if no valid files were added.
+    """
+    added = 0
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for p in paths:
             fp = Path(p)
             if fp.exists():
                 zf.write(fp, fp.name)
+                added += 1
+    if added == 0:
+        Path(output_path).unlink(missing_ok=True)
+        return None
     return output_path
 
 
@@ -29,7 +37,6 @@ def zip_epub_batch(
         return None
 
     epub_files = job.get("epub_files") or []
-    # Also check single-book job
     if not epub_files and job.get("epub_file"):
         epub_files = [job["epub_file"]]
 
