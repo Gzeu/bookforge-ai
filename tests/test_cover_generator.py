@@ -10,16 +10,25 @@ def test_slugify_basic():
     assert slugify("The Hash Conspiracy") == "the-hash-conspiracy"
 
 
+def test_slugify_empty_returns_cover():
+    assert slugify("") == "cover"
+    assert slugify("!!!##") == "cover"
+
+
 def test_build_cover_prompt_contains_genre_and_title():
     prompt = build_cover_prompt("The Hash Conspiracy", genre="thriller")
     assert "thriller" in prompt.lower()
     assert "The Hash Conspiracy" in prompt
 
 
-def test_save_cover_placeholder(tmp_path, monkeypatch):
-    monkeypatch.setenv("COVERS_DIR", str(tmp_path))
-    from scripts import cover_generator as cg
-    cg.COVERS_DIR = tmp_path
-    result = save_cover_placeholder("Test Book", "fantasy")
+def test_build_cover_prompt_with_subtitle():
+    prompt = build_cover_prompt("Title", subtitle="The Reckoning", genre="horror")
+    assert "The Reckoning" in prompt
+
+
+def test_save_cover_placeholder_uses_output_dir(tmp_path):
+    # Uses explicit output_dir param — no global patching needed
+    result = save_cover_placeholder("Test Book", "fantasy", output_dir=tmp_path)
     assert result["genre"] == "fantasy"
     assert os.path.exists(result["path"])
+    assert result["path"].startswith(str(tmp_path))

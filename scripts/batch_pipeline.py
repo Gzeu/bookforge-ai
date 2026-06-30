@@ -36,59 +36,60 @@ class BatchJob:
     finished_at: str | None = None
 
 
+def _make_title_from_premise(premise: str, fallback: str) -> str:
+    """Generate a working title from the first words of a premise."""
+    words = [w for w in premise.split()[:8] if re.sub(r"[^a-zA-Z]", "", w)]
+    title = " ".join(w.capitalize() for w in words[:5])[:40]
+    return title or fallback
+
+
 async def run_single_job(job: BatchJob, semaphore: asyncio.Semaphore) -> BatchJob:
     """Run one book generation job with concurrency control."""
     async with semaphore:
         from scripts.generate_book import NovelClawClient
         from scripts.txt_to_epub import txt_to_epub
-        import threading
 
         job.status = "running"
         job.started_at = datetime.now().isoformat()
-        print(f"  ▶ [{job.genre_id.upper()}] Starting: {job.title}")
+        print(f"  \u25b6 [{job.genre_id.upper()}] Starting: {job.title}")
 
         try:
-            # Run blocking NovelClaw call in thread pool
             loop = asyncio.get_event_loop()
             client = NovelClawClient()
 
-            def generate():
-                return client.create_and_wait(job.premise, job.chapters, job.provider)
-
-            story_id = await loop.run_in_executor(None, generate)
+            story_id = await loop.run_in_executor(None, lambda: client.create_and_wait(
+                job.premise, job.chapters, job.provider
+            ))
             job.story_id = story_id
 
-            # Export manuscript
             MANUSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
             mfile = str(MANUSCRIPTS_DIR / f"batch_{job.genre_id}_{story_id}.txt")
             await loop.run_in_executor(None, lambda: client.export(story_id, mfile))
             job.manuscript_file = mfile
 
-            # Convert to EPUB
             EPUB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             safe = job.title.lower().replace(" ", "_")[:25]
             epub_file = str(EPUB_OUTPUT_DIR / f"{safe}_{story_id}.epub")
+
+            # Explicit variable capture to avoid lambda closure bug
+            _mfile, _epub, _title, _author = mfile, epub_file, job.title, job.author
             await loop.run_in_executor(
-                None,
-                lambda: txt_to_epub(mfile, epub_file, job.title, job.author)
+                None, lambda: txt_to_epub(_mfile, _epub, _title, _author)
             )
             job.epub_file = epub_file
             job.status = "done"
-            print(f"  ✅ [{job.genre_id.upper()}] Done: {job.title} → {epub_file}")
+            print(f"  \u2705 [{job.genre_id.upper()}] Done: {job.title} \u2192 {epub_file}")
 
         except Exception as e:
             job.status = "failed"
             job.error = str(e)
-            print(f"  ❌ [{job.genre_id.upper()}] Failed: {job.title} — {e}")
+            print(f"  \u274c [{job.genre_id.upper()}] Failed: {job.title} \u2014 {e}")
 
         job.finished_at = datetime.now().isoformat()
         return job
 
 
-async def run_batch(
-    jobs: list[BatchJob],
-    max_concurrent: int = 2,
-) -> list[BatchJob]:
+async def run_batch(jobs: list[BatchJob], max_concurrent: int = 2) -> list[BatchJob]:
     """Run all jobs with a concurrency limit."""
     semaphore = asyncio.Semaphore(max_concurrent)
     tasks = [run_single_job(job, semaphore) for job in jobs]
@@ -106,13 +107,11 @@ def build_batch_from_genres(
     jobs = []
     for gid in genre_ids:
         if gid not in GENRES:
-            print(f"  ⚠️ Unknown genre: {gid}, skipping")
+            print(f"  \u26a0\ufe0f Unknown genre: {gid}, skipping")
             continue
         genre = GENRES[gid]
         premise = get_random_premise(gid, fill_placeholders=True)
-        # Generate a working title from the premise
-        words = premise.split()[:6]
-        title = " ".join(w.capitalize() for w in words if w.isalpha())[:40] or genre.name + " Novel"
+        title = _make_title_from_premise(premise, fallback=f"{genre.name} Novel")
         jobs.append(BatchJob(
             genre_id=gid,
             title=title,
@@ -134,25 +133,22 @@ def save_batch_report(jobs: list[BatchJob], output_path: str = "batch_report.jso
     }
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2)
-    print(f"\n📊 Batch report saved: {output_path}")
+    print(f"\n\U0001f4ca Batch report saved: {output_path}")
     return report
 
 
 if __name__ == "__main__":
+    import re
     import typer
     app = typer.Typer()
 
     @app.command()
     def run(
-        genres: str = typer.Option(
-            "thriller,romance,mystery,scifi",
-            "--genres", "-g",
-            help="Comma-separated genre IDs (or 'all' for all 19 genres)"
-        ),
+        genres: str = typer.Option("thriller,romance,mystery,scifi", "--genres", "-g"),
         author: str = typer.Option("BookForge AI", "--author", "-a"),
         chapters: int = typer.Option(10, "--chapters", "-c"),
         provider: str = typer.Option(None, "--provider", "-p"),
-        concurrent: int = typer.Option(2, "--concurrent", help="Max parallel jobs"),
+        concurrent: int = typer.Option(2, "--concurrent"),
         report: str = typer.Option("batch_report.json", "--report"),
     ):
         from rich.console import Console
@@ -162,12 +158,12 @@ if __name__ == "__main__":
         all_genre_ids = list(GENRES.keys())
         genre_list = all_genre_ids if genres == "all" else [g.strip() for g in genres.split(",")]
 
-        console.print(f"\n[bold cyan]📚 BookForge AI — Batch Mode[/bold cyan]")
+        console.print(f"\n[bold cyan]\U0001f4da BookForge AI \u2014 Batch Mode[/bold cyan]")
         console.print(f"Genres: {genre_list}")
         console.print(f"Concurrent: {concurrent} | Chapters/book: {chapters}\n")
 
         jobs = build_batch_from_genres(genre_list, author, chapters, provider)
-        console.print(f"[yellow]🚀 Starting {len(jobs)} books...[/yellow]\n")
+        console.print(f"[yellow]\U0001f680 Starting {len(jobs)} books...[/yellow]\n")
 
         results = asyncio.run(run_batch(jobs, concurrent))
         report_data = save_batch_report(results, report)
@@ -178,11 +174,11 @@ if __name__ == "__main__":
         table.add_column("Status")
         table.add_column("EPUB")
         for j in results:
-            status_color = "green" if j.status == "done" else "red"
+            color = "green" if j.status == "done" else "red"
             table.add_row(
                 j.genre_id, j.title[:30],
-                f"[{status_color}]{j.status}[/{status_color}]",
-                j.epub_file or j.error or "-"
+                f"[{color}]{j.status}[/{color}]",
+                j.epub_file or j.error or "-",
             )
         console.print(table)
 

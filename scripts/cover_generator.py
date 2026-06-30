@@ -21,7 +21,12 @@ def slugify(text: str) -> str:
     return text.strip("-") or "cover"
 
 
-def build_cover_prompt(title: str, subtitle: str = "", genre: str = "thriller", mood: str = "cinematic") -> str:
+def build_cover_prompt(
+    title: str,
+    subtitle: str = "",
+    genre: str = "thriller",
+    mood: str = "cinematic",
+) -> str:
     base = f"Book cover, {genre}, {mood}, dramatic lighting, centered composition, professional typography space"
     if title:
         base += f", title concept: {title}"
@@ -36,14 +41,20 @@ def generate_cover_metadata(title: str, genre: str, provider: str) -> dict:
         "genre": genre,
         "provider": provider,
         "generated_at": datetime.utcnow().isoformat() + "Z",
-        "size": "1600x2560"
+        "size": "1600x2560",
     }
 
 
-def save_cover_placeholder(title: str, genre: str, provider: str = "placeholder") -> dict:
-    COVERS_DIR.mkdir(parents=True, exist_ok=True)
+def save_cover_placeholder(
+    title: str,
+    genre: str,
+    provider: str = "placeholder",
+    output_dir: Path = None,  # explicit param — avoids global state in tests
+) -> dict:
+    out = output_dir or COVERS_DIR
+    out.mkdir(parents=True, exist_ok=True)
     filename = f"{slugify(title)}-{slugify(genre)}.json"
-    path = COVERS_DIR / filename
+    path = out / filename
     data = generate_cover_metadata(title, genre, provider)
     data["prompt"] = build_cover_prompt(title, genre=genre)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
