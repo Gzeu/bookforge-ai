@@ -1,23 +1,13 @@
-# BookForge AI v1.1.0 — Python Dependencies
-
-# Core pipeline
+# BookForge AI — Python Dependencies
 ebooklib>=0.18
 Pillow>=10.0
 requests>=2.31
+playwright>=1.40
 python-dotenv>=1.0
-
-# CLI
+aiohttp>=3.9
 rich>=13.0
 typer>=0.9
-
-# Web UI
-fastapi>=0.111
-uvicorn[standard]>=0.29
+fastapi>=0.115
+uvicorn>=0.30
 jinja2>=3.1
-python-multipart>=0.0.9
-
-# KDP uploader
-playwright>=1.40
-
-# Async
-aiohttp>=3.9
+python-docx>=1.1

@@ -6,6 +6,35 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.0] — 2026-06-30
+
+### Added
+- **`scripts/cover_generator.py`** — automatic cover generation helper
+  - Supports local Stable Diffusion WebUI (`SD_WEBUI_URL`) and Canva (`CANVA_API_KEY`) modes
+  - Genre-aware prompts, subtitle support, KDP-safe 1.6:1 cover size defaults
+  - Saves output in `covers/` and returns metadata JSON
+- **`scripts/txt_to_docx.py`** — DOCX export for KDP paperback workflows
+  - Chapter heading detection, scene break styling, title page metadata
+  - Produces print-friendly `.docx` alongside EPUB when requested
+- **`scripts/scheduler.py`** — scheduled batch automation
+  - JSON-based schedules, interval polling, safe subprocess execution
+  - Designed for cron/systemd or long-running worker usage
+- **`scripts/webhooks.py`** — notification dispatch layer
+  - Supports Discord webhook and generic JSON POST callback endpoints
+  - Emits batch start, success, failure events
+- **`tests/test_cover_generator.py`** — validates prompt building and filename sanitization
+- **`tests/test_txt_to_docx.py`** — validates DOCX export and output creation
+- **`web/templates/tools.html`** — web UI tools page for cover + DOCX utilities
+- **`web/static/tools.js`** — browser helpers for tools page interactions
+
+### Changed
+- Updated **`pipeline.py`** design roadmap to support optional DOCX and cover generation stages
+- Expanded **`requirements.txt`** for DOCX and webhook support
+- Updated **`pyproject.toml`** to version `1.3.0`
+- Updated **`README.md`** roadmap to mention paperback, covers, and automation hooks
+
+---
+
 ## [1.2.0] — 2026-06-30
 
 ### Added
@@ -58,8 +87,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Planned
-- Web UI route `/batch` for async batch queue from browser
-- Cover generation via Stable Diffusion / Canva API
 - KDP sales dashboard integration
-- DOCX export for print-on-demand (KDP paperback)
 - Docker Compose for full stack (NovelClaw + BookForge Web UI)
+- Multi-provider cover layout presets

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="max-w-5xl mx-auto p-6 space-y-6">
+  <div>
+    <h1 class="text-3xl font-bold">Publishing Tools</h1>
+    <p class="opacity-70">Utilities for covers, paperback DOCX export, and automation helpers.</p>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">Cover Generation</h2>
+        <p>Generate or stage metadata for a genre-aware cover workflow.</p>
+        <ul class="list-disc pl-6 text-sm opacity-80">
+          <li>Stable Diffusion / Canva ready</li>
+          <li>KDP-safe vertical ratio</li>
+          <li>Prompt metadata saved in covers/</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">DOCX Export</h2>
+        <p>Prepare paperback-friendly DOCX output from generated manuscripts.</p>
+        <ul class="list-disc pl-6 text-sm opacity-80">
+          <li>Auto chapter headings</li>
+          <li>Scene break support</li>
+          <li>Title page included</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
