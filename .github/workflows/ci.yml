@@ -25,8 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov ruff
+          pip install -e ".[dev]"
+          playwright install chromium --with-deps
 
       - name: Lint with ruff
         run: ruff check scripts/ pipeline.py

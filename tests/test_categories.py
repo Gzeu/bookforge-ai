@@ -51,12 +51,19 @@ class TestPremiseGeneration:
             assert len(remaining) <= 5, f"{gid}: {remaining}"
 
     def test_build_full_premise_replaces_known_fields(self):
-        p = build_full_premise("thriller", {
-            "protagonist": "Maria",
-            "antagonist": "the Shadow Council",
-        })
+        # Pin the template: build_full_premise picks one at random, and not
+        # every thriller template contains {antagonist}.
+        from unittest.mock import patch
+        pinned = GENRES["thriller"].premise_templates[0]
+        with patch("scripts.categories.random.choice", return_value=pinned):
+            p = build_full_premise("thriller", {
+                "protagonist": "Maria",
+                "antagonist": "the Shadow Council",
+            })
         assert "Maria" in p
         assert "the Shadow Council" in p
+        assert "{protagonist}" not in p
+        assert "{antagonist}" not in p
 
     def test_build_full_premise_invalid_genre(self):
         with pytest.raises(ValueError):
