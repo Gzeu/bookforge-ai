@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
+from scripts.generate_book import NovelClawClient
+from scripts.txt_to_epub import txt_to_epub
+from scripts.kdp_upload import upload_to_kdp
+
 load_dotenv()
 
 EPUB_OUTPUT_DIR = Path(os.getenv("EPUB_OUTPUT_DIR", "./epub_output"))
@@ -47,7 +51,6 @@ def run_pipeline(
 
     # Step 1: Generate manuscript
     console.print("\n[bold]Step 1:[/bold] Generating manuscript via NovelClaw...")
-    from scripts.generate_book import NovelClawClient
     client = NovelClawClient()
     if not client.health():
         console.print("[red]❌ NovelClaw is not running![/red]")
@@ -62,7 +65,6 @@ def run_pipeline(
 
     # Step 2: Convert to EPUB
     console.print("\n[bold]Step 2:[/bold] Converting to EPUB...")
-    from scripts.txt_to_epub import txt_to_epub
     EPUB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     safe_title = title.lower().replace(" ", "_")[:30]
     epub_file = str(EPUB_OUTPUT_DIR / f"{safe_title}_{story_id}.epub")
@@ -73,7 +75,6 @@ def run_pipeline(
     # Step 3: Upload to KDP (optional)
     if upload and not no_upload:
         console.print("\n[bold]Step 3:[/bold] Uploading to Amazon KDP...")
-        from scripts.kdp_upload import upload_to_kdp
         asyncio.run(upload_to_kdp(
             epub_file=epub_file,
             title=title,

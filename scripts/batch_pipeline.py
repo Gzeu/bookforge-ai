@@ -158,7 +158,7 @@ if __name__ == "__main__":
         all_genre_ids = list(GENRES.keys())
         genre_list = all_genre_ids if genres == "all" else [g.strip() for g in genres.split(",")]
 
-        console.print(f"\n[bold cyan]\U0001f4da BookForge AI \u2014 Batch Mode[/bold cyan]")
+        console.print("\n[bold cyan]\U0001f4da BookForge AI \u2014 Batch Mode[/bold cyan]")
         console.print(f"Genres: {genre_list}")
         console.print(f"Concurrent: {concurrent} | Chapters/book: {chapters}\n")
 
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         console.print(f"[yellow]\U0001f680 Starting {len(jobs)} books...[/yellow]\n")
 
         results = asyncio.run(run_batch(jobs, concurrent))
-        report_data = save_batch_report(results, report)
+        save_batch_report(results, report)
 
         table = Table(title="Batch Results")
         table.add_column("Genre")

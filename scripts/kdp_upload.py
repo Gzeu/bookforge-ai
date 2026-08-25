@@ -7,6 +7,9 @@ NOTE: Requires a valid KDP account. Use responsibly.
 import asyncio
 import os
 from pathlib import Path
+
+from playwright.async_api import async_playwright
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,8 +30,6 @@ async def upload_to_kdp(
     language: str = "English",
     ai_disclosure: bool = True,
 ) -> bool:
-    from playwright.async_api import async_playwright
-
     # Validate epub exists before launching browser
     if not Path(epub_file).exists():
         raise FileNotFoundError(f"EPUB file not found: {epub_file}")

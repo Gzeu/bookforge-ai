@@ -3,6 +3,7 @@
 import json
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -22,6 +23,7 @@ def run_job(command: str) -> int:
         return -1
     if parts[0] not in ALLOWED_COMMANDS:
         raise ValueError(f"Command not allowed: '{parts[0]}'. Allowed: {ALLOWED_COMMANDS}")
+    parts[0] = sys.executable  # resolve to the actual interpreter on this system
     result = subprocess.run(parts, shell=False, check=False)
     return result.returncode
 
