@@ -11,7 +11,7 @@ Covers 20 major KDP genres with:
 """
 from __future__ import annotations
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -27,7 +27,6 @@ class Genre:
     recommended_chapters: int
     typical_price: float
     generation_tip: str
-    color: str  # tailwind color class for UI
 
 
 GENRES: dict[str, Genre] = {
@@ -430,6 +429,27 @@ GENRES: dict[str, Genre] = {
         typical_price=3.99,
         generation_tip="Ground abstract spiritual concepts in concrete sensory scenes. The protagonist's internal transformation should be visible through their actions."
     ),
+
+    "humor": Genre(
+        id="humor",
+        name="Humor & Satire",
+        emoji="😂",
+        description="Comedic fiction, satire, and absurdist takes on everyday life.",
+        sub_genres=["Satirical Fiction", "Romantic Comedy", "Absurdist Fiction",
+                    "Workplace Comedy", "Parody", "Dark Comedy"],
+        premise_templates=[
+            "When {protagonist}, a chronically {flaw} {job}, accidentally {absurd_incident} in front of the entire {organization}, they must {goal} before {deadline} — while pretending nothing is wrong.",
+            "{protagonist} wins a {contest} that turns out to be {scam_or_misunderstanding}. Now contractually obligated to {ridiculous_obligation}, they drag their skeptical friend {sidekick} into a cross-{setting} misadventure.",
+            "In a world where {absurd_rule}, {protagonist} is the only person who {counterfeit_ability}. Naturally, everyone wants to {exploit_them}, and nobody more enthusiastically than {antagonist}.",
+            "After being fired via {humiliation_medium}, {protagonist} vows revenge on {antagonist} by {absurd_revenge_plan}. The plan works perfectly — which is exactly the problem.",
+            "{protagonist} and {love_interest} hate each other on sight at {shared_event}. Forced to cooperate on {shared_task}, they discover the only thing they have in common is {shared_flaw}. It might be enough.",
+        ],
+        kdp_keywords=["comedy novel", "humorous fiction", "satire book", "feel good comedy",
+                      "romantic comedy novel", "funny book", "witty fiction"],
+        recommended_chapters=16,
+        typical_price=2.99,
+        generation_tip="Comedy dies from over-explanation. Let situations escalate logically; cut any line that announces itself as a joke. The narrator's deadpan delivery sells absurdity."
+    ),
 }
 
 
@@ -487,7 +507,6 @@ def build_full_premise(genre_id: str, custom_fields: dict[str, str]) -> str:
 
 
 if __name__ == "__main__":
-    import json
     print(f"Available genres: {len(GENRES)}")
     for g in get_all_genres():
         print(f"  {g.emoji} {g.name} ({g.id}) — {g.recommended_chapters} chapters @ ${g.typical_price}")
