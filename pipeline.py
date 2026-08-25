@@ -7,11 +7,12 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 from scripts.generate_book import NovelClawClient
-from scripts.txt_to_epub import txt_to_epub
 from scripts.kdp_upload import upload_to_kdp
+from scripts.txt_to_epub import txt_to_epub
 
 load_dotenv()
 

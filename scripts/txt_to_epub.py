@@ -4,10 +4,12 @@ BookForge AI — Manuscript to EPUB Converter
 Converts NovelClaw TXT output to KDP-ready EPUB.
 """
 import os
-from pathlib import Path
 from datetime import datetime
-from ebooklib import epub
+from pathlib import Path
+
 from dotenv import load_dotenv
+from ebooklib import epub
+
 from scripts.utils import detect_chapters  # shared, deduped
 
 load_dotenv()

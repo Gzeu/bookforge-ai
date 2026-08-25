@@ -6,8 +6,9 @@ NovelClaw accepts any OpenAI-compatible provider slug via the 'provider' field.
 """
 import os
 import time
-import requests
 from pathlib import Path
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()

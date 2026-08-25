@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """BookForge AI — TXT to DOCX export for paperback workflows."""
 from pathlib import Path
+
 from docx import Document
-from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
+
 from scripts.utils import detect_chapters  # shared, deduped
 
 

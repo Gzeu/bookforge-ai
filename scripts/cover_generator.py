@@ -7,6 +7,7 @@ Backends: Stable Diffusion WebUI (local) or Canva API.
 import logging
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -103,10 +104,11 @@ def generate_cover_sd(title: str, author: str, genre_id: str = None,
                       subtitle: str = "", preset_name: str = None,
                       output_dir: Path = None) -> dict:
     """Generate cover using local Stable Diffusion WebUI."""
-    import requests
     import base64
-    from PIL import Image
     import io
+
+    import requests
+    from PIL import Image
 
     out_dir = output_dir or _DEFAULT_COVERS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)

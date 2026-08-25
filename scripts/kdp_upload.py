@@ -8,9 +8,8 @@ import asyncio
 import os
 from pathlib import Path
 
-from playwright.async_api import async_playwright
-
 from dotenv import load_dotenv
+from playwright.async_api import async_playwright
 
 load_dotenv()
 

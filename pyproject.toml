@@ -45,6 +45,12 @@ include = ["scripts*", "web*"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# E501: long lines live mostly in genre premise templates; formatting is a
+# formatter's job and this project doesn't run one in CI.
+ignore = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

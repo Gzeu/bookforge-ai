@@ -4,16 +4,16 @@ BookForge AI — FastAPI Web UI v2.0.1
 Run: uvicorn web.app:app --host 0.0.0.0 --port 8020 --reload
 """
 import asyncio
-import os
 import json
+import os
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Form, BackgroundTasks, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -112,7 +112,8 @@ def _cerebras_or_mistral_completion(prompt: str, temperature: float = 0.9, max_t
 
 def _run_pipeline_sync(job_id: str, premise: str, title: str, author: str,
                        chapters: int, provider: str, description: str):
-    import sys, time
+    import sys
+    import time
     sys.path.insert(0, str(Path(__file__).parent.parent))
     JOBS[job_id]["status"] = "generating"
     JOBS[job_id]["log"] = ["Starting NovelClaw generation..."]
@@ -344,7 +345,7 @@ async def research_page(request: Request):
 
 @app.post("/research", response_class=HTMLResponse)
 async def research_submit(request: Request, topic: str = Form(...), provider: str = Form(None)):
-    from scripts.niche_research import research_niche, available_providers
+    from scripts.niche_research import available_providers, research_niche
     avail = available_providers()
     if "cerebras" in avail:
         provider = "cerebras"
@@ -366,8 +367,9 @@ async def research_submit(request: Request, topic: str = Form(...), provider: st
 
 @app.get("/categories", response_class=HTMLResponse)
 async def categories_page(request: Request):
-    from scripts.categories import get_all_genres
     from dataclasses import asdict
+
+    from scripts.categories import get_all_genres
     genres = get_all_genres()
     genres_json = json.dumps({g.id: asdict(g) for g in genres})
     return _render("categories.html", {
@@ -399,14 +401,15 @@ async def batch_generate(
 
 @app.get("/api/genres")
 async def api_genres():
-    from scripts.categories import get_all_genres
     from dataclasses import asdict
+
+    from scripts.categories import get_all_genres
     return JSONResponse({g.id: asdict(g) for g in get_all_genres()})
 
 
 @app.get("/api/genres/{genre_id}/premise")
 async def api_random_premise(genre_id: str, fill: bool = True):
-    from scripts.categories import get_random_premise, get_genre
+    from scripts.categories import get_genre, get_random_premise
     if not get_genre(genre_id):
         raise HTTPException(404, f"Genre '{genre_id}' not found")
     return JSONResponse({"genre_id": genre_id, "premise": get_random_premise(genre_id, fill)})

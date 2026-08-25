@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """BookForge AI — Webhook notifications for batch and job events."""
 import logging
+
 import requests
 
 logger = logging.getLogger(__name__)

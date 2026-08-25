@@ -4,14 +4,17 @@ BookForge AI — Batch Pipeline
 Generate multiple books in parallel across genres.
 """
 from __future__ import annotations
+
 import asyncio
+import json
 import os
 import re
-import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, asdict
+
 from dotenv import load_dotenv
+
 from scripts.categories import GENRES, get_random_premise
 
 load_dotenv()
